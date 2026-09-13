@@ -1,30 +1,37 @@
-#define OUTFILE "" //OUTPUT
+#define OUTFILE "dist/crave.user.js"
 //#define BUILD_WITH_MUJS
 #include "build.h"
 //#include "mujscompiler.h"
 
-#define NAME        ""
-#define NAMESPACE   ""
-#define DESCRIPTION ""
+#define NAME        "Crave"
+#define NAMESPACE   "https://github.com/HimadriChakra12/bundlejs"
+#define DESCRIPTION "Kagi-like power features on Brave Search: domain blocking/boosting, lenses, Google quick-links, Wikipedia infobox, inline calculator, Google Maps popup"
 
 listmatch(
-    "",
+    "https://search.brave.com/*",
     );
 
 listgrant(
-    "unsafeWindow",
-    "GM_download"
+    "GM_getValue",
+    "GM_setValue"
     );
 
-/* Custom @tag lines that don't have a fixed build_meta_t field. */
 listextra(
-    { "//NAME", "//Description" },
+    { "icon",        "https://brave.com/static-assets/images/brave-favicon.png" },
+    { "homepageURL", "https://github.com/HimadriChakra12/bundlejs" },
+    { "updateURL",   "https://raw.githubusercontent.com/HimadriChakra12/bundlejs/main/dist/crave.user.js" },
+    { "downloadURL", "https://raw.githubusercontent.com/HimadriChakra12/bundlejs/main/dist/crave.user.js" },
     );
 
 #define GROUPNAME group( \
-    "src/group/script.js", \
+    "src/google/config.js", \
+    "src/google/ui.js",     \
+    "src/google/blocker.js",\
+    "src/google/lenses.js", \
+    "src/google/nav.js",    \
+    "src/google/main.js",   \
     )
- 
+
 listorder(
     "src/start.js",
     GROUPNAME
@@ -32,20 +39,20 @@ listorder(
     );
 
 declaremeta(
-    .name = NAME,
-    .namespace_ = NAMESPACE,
+    .name        = NAME,
+    .namespace_  = NAMESPACE,
     .description = DESCRIPTION,
-    .match = MATCH, .match_count = MATCH_COUNT,
-    .grant = GRANT, .grant_count = GRANT_COUNT,
-    .run_at = "document-start",
-    .extra = EXTRA, .extra_count = EXTRA_COUNT,
+    .match       = MATCH, .match_count = MATCH_COUNT,
+    .grant       = GRANT, .grant_count = GRANT_COUNT,
+    .run_at      = "document-end",
+    .extra       = EXTRA, .extra_count = EXTRA_COUNT,
 );
 
 int main(void) {
     build_t b;
-    build_init(&b, NULL, "__HLS_SAVER_VERSION__"); 
+    build_init(&b, NULL, NULL);
     build_userscript_header(&b, &META);
     build_add_all(&b, ORDER, ORDER_COUNT, "src/");
-    build_finish(&b, NULL); 
+    build_finish(&b, NULL);
     return 0;
 }
