@@ -1,13 +1,15 @@
 const CFG_KEY = 'crave_cfg';
 
 const DEFAULTS = {
-  blockList: {},
-  boostList: {},
   lenses:    [],
   features: {
-    blocker: true,
-    lenses:  true,
-    nav:     true,
+    lenses:     true,
+    bang:       true,
+    categories: true,
+    answered:   true,
+    tracker:    true,
+    archive:    true,
+    within:     true,
   },
 };
 
@@ -20,8 +22,6 @@ function cfgLoad() {
     for (const k of Object.keys(DEFAULTS.features)) {
       if (_cfg.features[k] === undefined) _cfg.features[k] = DEFAULTS.features[k];
     }
-    if (!_cfg.blockList) _cfg.blockList = {};
-    if (!_cfg.boostList) _cfg.boostList = {};
     if (!_cfg.lenses)    _cfg.lenses    = [];
   } catch (_) {
     _cfg = JSON.parse(JSON.stringify(DEFAULTS));
@@ -30,19 +30,6 @@ function cfgLoad() {
 
 function cfgSave() { GM_setValue(CFG_KEY, JSON.stringify(_cfg)); }
 function cfgGet()  { if (!_cfg) cfgLoad(); return _cfg; }
-
-function cfgBlockDomain(domain) {
-  const c = cfgGet(); c.blockList[domain] = true; delete c.boostList[domain]; cfgSave();
-}
-function cfgBoostDomain(domain) {
-  const c = cfgGet(); c.boostList[domain] = true; delete c.blockList[domain]; cfgSave();
-}
-function cfgUnpinDomain(domain) {
-  const c = cfgGet(); delete c.blockList[domain]; delete c.boostList[domain]; cfgSave();
-}
-
-function cfgIsBlocked(domain) { return !!cfgGet().blockList[domain]; }
-function cfgIsBoosted(domain) { return !!cfgGet().boostList[domain]; }
 
 function cfgToggleFeature(key) {
   const c = cfgGet(); c.features[key] = !c.features[key]; cfgSave(); return c.features[key];

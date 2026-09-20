@@ -1,52 +1,34 @@
-const LENS_PANEL_ID = 'crave-lens-panel';
+const LENS_LI_ID       = 'crave-lens-li';
+const LENS_DROPDOWN_ID = 'crave-lens-dropdown';
 
 const ALIAS_MAP = [
-  { alias: '@:',   expand: 'site:',     hint: 'site'      },
-  { alias: '.:',   expand: 'filetype:', hint: 'filetype'  },
-  { alias: '~:',   expand: 'related:',  hint: 'related'   },
-  { alias: 't:',   expand: 'intitle:',  hint: 'intitle'   },
-  { alias: 'u:',   expand: 'inurl:',    hint: 'inurl'     },
-  { alias: 'b:',   expand: 'before:',   hint: 'before'    },
-  { alias: 'a:',   expand: 'after:',    hint: 'after'     },
+  { alias: '@:',  expand: 'site:'     },
+  { alias: '.:',  expand: 'filetype:' },
+  { alias: '~:',  expand: 'related:'  },
+  { alias: 't:',  expand: 'intitle:'  },
+  { alias: 'u:',  expand: 'inurl:'    },
+  { alias: 'b:',  expand: 'before:'   },
+  { alias: 'a:',  expand: 'after:'    },
 ];
 
 const BUILTIN_LENSES = [
-  { name: 'GitHub',        prefix: 'site:github.com'                },
-  { name: 'Reddit',        prefix: 'site:reddit.com'                },
-  { name: 'MDN',           prefix: 'site:developer.mozilla.org'     },
-  { name: 'Wikipedia',     prefix: 'site:wikipedia.org'             },
-  { name: 'arXiv',         prefix: 'site:arxiv.org'                 },
-  { name: 'StackOverflow', prefix: 'site:stackoverflow.com'         },
-  { name: 'HN',            prefix: 'site:news.ycombinator.com'      },
-  { name: 'PDFs',          prefix: 'filetype:pdf'                   },
-  { name: 'Past week',     prefix: 'after:' + (() => {
-      const d = new Date(); d.setDate(d.getDate() - 7);
-      return d.toISOString().slice(0,10);
-    })()
-  },
-  { name: 'Past month',    prefix: 'after:' + (() => {
-      const d = new Date(); d.setMonth(d.getMonth() - 1);
-      return d.toISOString().slice(0,10);
-    })()
-  },
+  { name: 'GitHub',        prefix: 'site:github.com'            },
+  { name: 'Reddit',        prefix: 'site:reddit.com'            },
+  { name: 'MDN',           prefix: 'site:developer.mozilla.org' },
+  { name: 'Wikipedia',     prefix: 'site:wikipedia.org'         },
+  { name: 'arXiv',         prefix: 'site:arxiv.org'             },
+  { name: 'StackOverflow', prefix: 'site:stackoverflow.com'     },
+  { name: 'HN',            prefix: 'site:news.ycombinator.com'  },
+  { name: 'PDFs',          prefix: 'filetype:pdf'               },
 ];
-
-function lensesExpandAliases(raw) {
-  let q = raw;
-  for (const { alias, expand } of ALIAS_MAP) {
-    const re = new RegExp(alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    q = q.replace(re, expand);
-  }
-  return q;
-}
 
 function lensesGetQuery() {
   return new URLSearchParams(location.search).get('q') || '';
 }
 
 function lensesStripPrefixes(q) {
-  const all = [...BUILTIN_LENSES, ...cfgGet().lenses];
-  for (const l of all) q = q.replace(l.prefix, '').trim();
+  for (const l of [...BUILTIN_LENSES, ...cfgGet().lenses])
+    q = q.replace(l.prefix, '').trim();
   return q;
 }
 
@@ -57,201 +39,202 @@ function lensesApply(prefix) {
   location.href = u.toString();
 }
 
+function lensesExpandAliases(raw) {
+  let q = raw;
+  for (const { alias, expand } of ALIAS_MAP) {
+    const re = new RegExp(alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    q = q.replace(re, expand);
+  }
+  return q;
+}
+
 function lensesInjectStyles() {
   if (document.getElementById('crave-lens-styles')) return;
   const s = document.createElement('style');
   s.id = 'crave-lens-styles';
   s.textContent = `
-    #${LENS_PANEL_ID} {
+    #${LENS_LI_ID} a {
+      cursor: pointer;
+    }
+    #${LENS_DROPDOWN_ID} {
       position: fixed;
-      top: 120px; left: 0;
-      width: 168px;
+      z-index: 99999;
+      min-width: 180px;
       background: var(--color-bg-primary, #111);
-      border: 1px solid var(--color-border, #2a2a2a);
-      border-left: none;
-      border-radius: 0 10px 10px 0;
-      padding: 10px 0 12px;
-      z-index: 900;
-      box-shadow: 2px 0 16px rgba(0,0,0,.4);
-      font: 12px/1.5 system-ui, sans-serif;
-      color: var(--color-text-primary, #ddd);
-      transform: translateX(-152px);
-      transition: transform .2s ease;
+      border: 1px solid var(--divider-subtle, rgba(255,255,255,.1));
+      border-radius: 8px;
+      padding: 6px 0;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      display: none;
     }
-    #${LENS_PANEL_ID}:hover,
-    #${LENS_PANEL_ID}.crave-pinned {
-      transform: translateX(0);
-    }
-    #crave-lens-tab {
-      position: absolute; right: -22px; top: 50%;
-      transform: translateY(-50%);
-      writing-mode: vertical-rl;
-      font-size: 10px; color: #666;
-      padding: 8px 4px;
-      background: var(--color-bg-primary, #111);
-      border: 1px solid var(--color-border, #2a2a2a);
-      border-left: none;
-      border-radius: 0 6px 6px 0;
-      cursor: default;
-      letter-spacing: .08em;
-      user-select: none;
-    }
-    .crave-lens-section {
-      padding: 0 10px;
-      margin-bottom: 6px;
-    }
-    .crave-lens-heading {
-      font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-      color: #555; padding: 6px 10px 3px; user-select: none;
-    }
+    #${LENS_DROPDOWN_ID}.crave-open { display: block; }
+
     .crave-lens-chip {
       display: block; width: 100%;
       text-align: left;
-      font-size: 11px; padding: 3px 8px;
-      border-radius: 5px; border: none;
-      background: transparent;
-      color: var(--color-text-secondary, #aaa);
-      cursor: pointer; transition: all .12s;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 14px; line-height: 1.5;
+      padding: 5px 16px;
+      border: none; background: transparent;
+      color: var(--text-secondary, #aaa);
+      cursor: pointer; white-space: nowrap;
+      font-family: inherit;
     }
-    .crave-lens-chip:hover { background: var(--color-bg-secondary, #1e1e1e); color: #eee; }
+    .crave-lens-chip:hover {
+      background: var(--interactive-hover, rgba(255,255,255,.06));
+      color: var(--text-primary, #fff);
+    }
     .crave-lens-chip.crave-active {
-      color: var(--color-primary, #fa552a);
-      background: rgba(250,85,42,.08);
+      color: var(--focus-border, #fa552a);
+      font-weight: 500;
     }
+
     .crave-lens-sep {
-      height: 1px; background: var(--color-border, #2a2a2a); margin: 6px 10px;
+      height: 1px;
+      background: var(--divider-subtle, rgba(255,255,255,.08));
+      margin: 4px 0;
     }
-    .crave-alias-row {
-      display: flex; align-items: baseline; gap: 4px;
-      padding: 2px 8px; font-size: 10px;
+
+    .crave-alias-toggle {
+      display: block; width: 100%;
+      text-align: left;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-tertiary, #666);
+      padding: 6px 16px 3px;
+      border: none; background: transparent;
+      cursor: pointer; font-family: inherit;
     }
+    .crave-alias-toggle:hover { color: var(--text-primary, #fff); }
+
+    .crave-alias-table {
+      border-collapse: collapse;
+      font-size: 11px;
+      display: none; width: 100%;
+      padding: 0 16px 4px;
+      box-sizing: border-box;
+    }
+    .crave-alias-table.crave-open { display: table; }
+    .crave-alias-table td { padding: 2px 3px; vertical-align: middle; }
     .crave-alias-key {
-      font-family: monospace; font-size: 10px;
-      color: var(--color-primary, #fa552a);
-      min-width: 28px; flex-shrink: 0;
+      font-family: ui-monospace, monospace;
+      color: var(--focus-border, #fa552a);
     }
-    .crave-alias-val {
-      color: #555; font-size: 10px;
-    }
-    #crave-lens-input-wrap {
-      padding: 4px 10px 2px;
-      display: flex; gap: 4px;
-    }
-    #crave-lens-input {
-      flex: 1; font-size: 10px; padding: 3px 6px;
-      background: var(--color-bg-secondary, #1e1e1e);
-      border: 1px solid var(--color-border, #333);
-      border-radius: 4px; color: inherit;
-    }
-    #crave-lens-go {
-      font-size: 10px; padding: 3px 7px;
-      background: var(--color-primary, #fa552a);
-      border: none; border-radius: 4px; color: #fff; cursor: pointer;
+    .crave-alias-arrow { color: var(--text-tertiary, #555); padding: 0 4px; }
+    .crave-alias-expand {
+      color: var(--text-secondary, #888);
+      font-family: ui-monospace, monospace;
     }
   `;
   document.head.appendChild(s);
 }
 
-function lensesRender() {
-  const old = document.getElementById(LENS_PANEL_ID);
-  if (old) old.remove();
+function lensesCloseDropdown() {
+  const dd = document.getElementById(LENS_DROPDOWN_ID);
+  if (dd) dd.classList.remove('crave-open');
+}
 
-  if (!cfgFeatureOn('lenses')) return;
+function lensesBuildDropdown() {
+  let dd = document.getElementById(LENS_DROPDOWN_ID);
+  if (dd) dd.remove();
 
-  lensesInjectStyles();
-
-  const panel = document.createElement('div');
-  panel.id = LENS_PANEL_ID;
-
-  const tab = document.createElement('div');
-  tab.id = 'crave-lens-tab';
-  tab.textContent = 'LENSES';
-  panel.appendChild(tab);
+  dd = document.createElement('div');
+  dd.id = LENS_DROPDOWN_ID;
 
   const currentQ = lensesGetQuery();
 
-  const allLenses = [...BUILTIN_LENSES, ...cfgGet().lenses];
-  const h1 = document.createElement('div');
-  h1.className = 'crave-lens-heading';
-  h1.textContent = 'Quick lenses';
-  panel.appendChild(h1);
-
-  allLenses.forEach(lens => {
-    const btn = document.createElement('button');
-    btn.className = 'crave-lens-chip';
-    btn.textContent = lens.name;
-    btn.title = lens.prefix;
-    if (currentQ.includes(lens.prefix)) btn.classList.add('crave-active');
-    btn.addEventListener('click', () => lensesApply(lens.prefix));
-    panel.appendChild(btn);
+  [...BUILTIN_LENSES, ...cfgGet().lenses].forEach(lens => {
+    const chip = document.createElement('button');
+    chip.className = 'crave-lens-chip';
+    chip.textContent = lens.name;
+    chip.title = lens.prefix;
+    if (currentQ.includes(lens.prefix)) chip.classList.add('crave-active');
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      lensesCloseDropdown();
+      lensesApply(lens.prefix);
+    });
+    dd.appendChild(chip);
   });
 
-  const sep1 = document.createElement('div');
-  sep1.className = 'crave-lens-sep';
-  panel.appendChild(sep1);
+  const sep = document.createElement('div');
+  sep.className = 'crave-lens-sep';
+  dd.appendChild(sep);
 
-  const h2 = document.createElement('div');
-  h2.className = 'crave-lens-heading';
-  h2.textContent = 'Alias shortcuts';
-  panel.appendChild(h2);
+  const aliasToggle = document.createElement('button');
+  aliasToggle.className = 'crave-alias-toggle';
+  aliasToggle.textContent = 'Aliases ›';
 
+  const table = document.createElement('table');
+  table.className = 'crave-alias-table';
   ALIAS_MAP.forEach(({ alias, expand }) => {
-    const row = document.createElement('div');
-    row.className = 'crave-alias-row';
-    row.title = 'Type ' + alias + 'value in the box below';
-    const key = document.createElement('span');
-    key.className = 'crave-alias-key';
-    key.textContent = alias;
-    const val = document.createElement('span');
-    val.className = 'crave-alias-val';
-    val.textContent = '→ ' + expand;
-    row.appendChild(key);
-    row.appendChild(val);
-    panel.appendChild(row);
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="crave-alias-key">${alias}</td>` +
+      `<td class="crave-alias-arrow">→</td>` +
+      `<td class="crave-alias-expand">${expand}</td>`;
+    table.appendChild(tr);
   });
 
-  const sep2 = document.createElement('div');
-  sep2.className = 'crave-lens-sep';
-  panel.appendChild(sep2);
-
-  const h3 = document.createElement('div');
-  h3.className = 'crave-lens-heading';
-  h3.textContent = 'Search with alias';
-  panel.appendChild(h3);
-
-  const inputWrap = document.createElement('div');
-  inputWrap.id = 'crave-lens-input-wrap';
-
-  const input = document.createElement('input');
-  input.id = 'crave-lens-input';
-  input.placeholder = '@:github.com query';
-  input.spellcheck = false;
-
-  const go = document.createElement('button');
-  go.id = 'crave-lens-go';
-  go.textContent = '→';
-
-  function runAlias() {
-    const raw = input.value.trim();
-    if (!raw) return;
-    const expanded = lensesExpandAliases(raw);
-    const u = new URL(location.href);
-    u.searchParams.set('q', expanded);
-    location.href = u.toString();
-  }
-
-  go.addEventListener('click', runAlias);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') runAlias(); });
-
-  inputWrap.appendChild(input);
-  inputWrap.appendChild(go);
-  panel.appendChild(inputWrap);
-
-  document.body.appendChild(panel);
-
-  const obs = new MutationObserver(() => {
-    if (!document.getElementById(LENS_PANEL_ID)) lensesRender();
+  aliasToggle.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = table.classList.toggle('crave-open');
+    aliasToggle.textContent = open ? 'Aliases ‹' : 'Aliases ›';
   });
-  obs.observe(document.body, { childList: true });
+
+  dd.appendChild(aliasToggle);
+  dd.appendChild(table);
+
+  document.body.appendChild(dd);
+  return dd;
+}
+
+function lensesInjectTab(ul) {
+  if (document.getElementById(LENS_LI_ID)) return;
+
+  const currentQ = lensesGetQuery();
+  const hasActive = [...BUILTIN_LENSES, ...cfgGet().lenses]
+    .some(l => currentQ.includes(l.prefix));
+
+  const li = document.createElement('li');
+  li.id = LENS_LI_ID;
+  li.className = 'tab-item svelte-l0weru';
+
+  const a = document.createElement('a');
+  a.className = 'desktop-default-semibold svelte-l0weru';
+  a.textContent = hasActive ? 'Lenses ●' : 'Lenses';
+  a.style.cursor = 'pointer';
+  if (hasActive) a.style.color = 'var(--focus-border, #fa552a)';
+
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const dd = lensesBuildDropdown();
+    const rect = a.getBoundingClientRect();
+    dd.style.top  = (rect.bottom + 4) + 'px';
+    dd.style.left = rect.left + 'px';
+    dd.classList.toggle('crave-open');
+  });
+
+  li.appendChild(a);
+  ul.appendChild(li);
+}
+
+function lensesRender() {
+  if (!cfgFeatureOn('lenses')) return;
+  lensesInjectStyles();
+
+  /* Close dropdown on outside click */
+  document.addEventListener('click', lensesCloseDropdown);
+
+  /* Use craveWaitFor + body-level observer so Svelte re-renders are caught */
+  craveWaitFor('#primary-tabs', ul => {
+    lensesInjectTab(ul);
+
+    const obs = new MutationObserver(() => {
+      const current = document.querySelector('#primary-tabs');
+      if (current) lensesInjectTab(current);
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  });
 }

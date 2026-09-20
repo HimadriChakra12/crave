@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Crave
 // @namespace    https://github.com/HimadriChakra12/bundlejs
-// @version      1.0.0
+// @version      2.0.0
 // @description  Kagi-like power features on Brave Search: domain blocking/boosting, lenses, Google quick-links, Wikipedia infobox, inline calculator, Google Maps popup
 // @match        https://search.brave.com/*
 // @grant        GM_getValue
@@ -21,13 +21,15 @@
 const CFG_KEY = 'crave_cfg';
 
 const DEFAULTS = {
-  blockList: {},
-  boostList: {},
   lenses:    [],
   features: {
-    blocker: true,
-    lenses:  true,
-    nav:     true,
+    lenses:     true,
+    bang:       true,
+    categories: true,
+    answered:   true,
+    tracker:    true,
+    archive:    true,
+    within:     true,
   },
 };
 
@@ -40,8 +42,6 @@ function cfgLoad() {
     for (const k of Object.keys(DEFAULTS.features)) {
       if (_cfg.features[k] === undefined) _cfg.features[k] = DEFAULTS.features[k];
     }
-    if (!_cfg.blockList) _cfg.blockList = {};
-    if (!_cfg.boostList) _cfg.boostList = {};
     if (!_cfg.lenses)    _cfg.lenses    = [];
   } catch (_) {
     _cfg = JSON.parse(JSON.stringify(DEFAULTS));
@@ -50,19 +50,6 @@ function cfgLoad() {
 
 function cfgSave() { GM_setValue(CFG_KEY, JSON.stringify(_cfg)); }
 function cfgGet()  { if (!_cfg) cfgLoad(); return _cfg; }
-
-function cfgBlockDomain(domain) {
-  const c = cfgGet(); c.blockList[domain] = true; delete c.boostList[domain]; cfgSave();
-}
-function cfgBoostDomain(domain) {
-  const c = cfgGet(); c.boostList[domain] = true; delete c.blockList[domain]; cfgSave();
-}
-function cfgUnpinDomain(domain) {
-  const c = cfgGet(); delete c.blockList[domain]; delete c.boostList[domain]; cfgSave();
-}
-
-function cfgIsBlocked(domain) { return !!cfgGet().blockList[domain]; }
-function cfgIsBoosted(domain) { return !!cfgGet().boostList[domain]; }
 
 function cfgToggleFeature(key) {
   const c = cfgGet(); c.features[key] = !c.features[key]; cfgSave(); return c.features[key];
@@ -78,109 +65,11 @@ function cfgRemoveLens(name) {
 }
 
 // ---- google/ui.js ----
-const PANEL_ID = 'crave-panel';
-const BTN_ID    = 'crave-toggle-btn';
-const TOAST_ID  = 'crave-toast';
+const TOAST_ID = 'crave-toast';
 
 function uiInjectStyles() {
   const style = document.createElement('style');
   style.textContent = `
-    #${BTN_ID} {
-      position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-      width: 38px; height: 38px; border-radius: 50%;
-      background: var(--color-primary, #fa552a);
-      color: #fff; font-size: 18px; line-height: 38px; text-align: center;
-      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.35);
-      user-select: none; transition: transform .15s;
-    }
-    #${BTN_ID}:hover { transform: scale(1.1); }
-
-    #${PANEL_ID} {
-      position: fixed; bottom: 68px; right: 20px; z-index: 99998;
-      width: 310px; background: var(--color-bg-primary, #1a1a1a);
-      border: 1px solid var(--color-border, #333);
-      border-radius: 10px; padding: 14px 16px;
-      font: 13px/1.5 system-ui, sans-serif;
-      color: var(--color-text-primary, #e8e8e8);
-      box-shadow: 0 4px 24px rgba(0,0,0,.5);
-      display: none;
-    }
-    #${PANEL_ID}.crave-open { display: block; }
-    #${PANEL_ID} h3 {
-      margin: 0 0 10px; font-size: 13px; font-weight: 600;
-      letter-spacing: .04em; color: var(--color-primary, #fa552a);
-      text-transform: uppercase;
-    }
-    #${PANEL_ID} .crave-section { margin-bottom: 12px; }
-    #${PANEL_ID} .crave-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 4px 0;
-    }
-    #${PANEL_ID} .crave-label { font-size: 12px; }
-    #${PANEL_ID} .crave-toggle {
-      position: relative; width: 34px; height: 18px; flex-shrink: 0;
-    }
-    #${PANEL_ID} .crave-toggle input { opacity: 0; width: 0; height: 0; }
-    #${PANEL_ID} .crave-slider {
-      position: absolute; inset: 0; border-radius: 18px; cursor: pointer;
-      background: #444; transition: background .2s;
-    }
-    #${PANEL_ID} .crave-slider::before {
-      content: ''; position: absolute;
-      width: 12px; height: 12px; left: 3px; top: 3px;
-      border-radius: 50%; background: #fff; transition: transform .2s;
-    }
-    #${PANEL_ID} .crave-toggle input:checked + .crave-slider { background: var(--color-primary, #fa552a); }
-    #${PANEL_ID} .crave-toggle input:checked + .crave-slider::before { transform: translateX(16px); }
-
-    #${PANEL_ID} .crave-sep {
-      height: 1px; background: var(--color-border, #333); margin: 8px 0;
-    }
-    #${PANEL_ID} .crave-lens-row {
-      display: flex; gap: 6px; margin-bottom: 6px;
-    }
-    #${PANEL_ID} .crave-lens-row input {
-      flex: 1; background: var(--color-bg-secondary, #2a2a2a);
-      border: 1px solid var(--color-border, #444); border-radius: 5px;
-      padding: 4px 7px; font-size: 11px; color: inherit;
-    }
-    #${PANEL_ID} .crave-btn {
-      padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer;
-      font-size: 11px; background: var(--color-primary, #fa552a); color: #fff;
-    }
-    #${PANEL_ID} .crave-btn-ghost {
-      background: transparent;
-      border: 1px solid var(--color-border, #444);
-      color: var(--color-text-primary, #e8e8e8);
-    }
-    #${PANEL_ID} .crave-list {
-      list-style: none; margin: 4px 0 0; padding: 0; max-height: 80px;
-      overflow-y: auto; font-size: 11px;
-    }
-    #${PANEL_ID} .crave-list li {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 2px 0;
-    }
-    #${PANEL_ID} .crave-list li span.crave-rm {
-      cursor: pointer; color: #888; font-size: 13px; line-height: 1;
-    }
-    #${PANEL_ID} .crave-list li span.crave-rm:hover { color: #fa552a; }
-
-    .crave-domain-btns {
-      display: inline-flex; gap: 4px; margin-left: 6px;
-      vertical-align: middle; opacity: 0;
-      transition: opacity .15s;
-    }
-    .fz-result:hover .crave-domain-btns,
-    .snippet:hover .crave-domain-btns,
-    [data-type="web"]:hover .crave-domain-btns { opacity: 1; }
-    .crave-domain-btns button {
-      font-size: 10px; padding: 1px 5px; border-radius: 3px;
-      border: 1px solid #555; background: transparent;
-      color: #aaa; cursor: pointer; line-height: 1.4;
-    }
-    .crave-domain-btns button:hover { border-color: #fa552a; color: #fa552a; }
-
     #${TOAST_ID} {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       z-index: 99999; background: #222; color: #eee;
@@ -189,7 +78,6 @@ function uiInjectStyles() {
       opacity: 0; pointer-events: none; transition: opacity .25s;
     }
     #${TOAST_ID}.crave-show { opacity: 1; }
-
   `;
   document.head.appendChild(style);
 }
@@ -208,281 +96,42 @@ function uiToast(msg, duration) {
   el._t = setTimeout(() => el.classList.remove('crave-show'), duration);
 }
 
-function uiBuildToggleRow(label, featureKey, onToggle) {
-  const row = document.createElement('div');
-  row.className = 'crave-row';
-
-  const lbl = document.createElement('span');
-  lbl.className = 'crave-label';
-  lbl.textContent = label;
-
-  const tog = document.createElement('label');
-  tog.className = 'crave-toggle';
-  const inp = document.createElement('input');
-  inp.type = 'checkbox';
-  inp.checked = cfgFeatureOn(featureKey);
-  inp.addEventListener('change', () => {
-    const state = cfgToggleFeature(featureKey);
-    if (onToggle) onToggle(state);
-    uiToast(label + (state ? ' on' : ' off'));
-  });
-  const slider = document.createElement('span');
-  slider.className = 'crave-slider';
-  tog.appendChild(inp);
-  tog.appendChild(slider);
-
-  row.appendChild(lbl);
-  row.appendChild(tog);
-  return row;
-}
-
-function uiBuildBlocklistSection() {
-  const sec = document.createElement('div');
-  sec.className = 'crave-section';
-
-  const h = document.createElement('h3');
-  h.textContent = 'Blocked domains';
-  sec.appendChild(h);
-
-  const list = document.createElement('ul');
-  list.className = 'crave-list';
-  list.id = 'crave-blocklist';
-  sec.appendChild(list);
-
-  function render() {
-    list.innerHTML = '';
-    const blocked = Object.keys(cfgGet().blockList);
-    if (blocked.length === 0) {
-      const li = document.createElement('li');
-      li.style.color = '#666';
-      li.textContent = 'none yet — hover a result to block';
-      list.appendChild(li);
-      return;
-    }
-    blocked.forEach(d => {
-      const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.textContent = d;
-      const rm = document.createElement('span');
-      rm.className = 'crave-rm';
-      rm.textContent = '×';
-      rm.title = 'Remove block';
-      rm.addEventListener('click', () => {
-        cfgUnpinDomain(d);
-        render();
-        uiToast('Unblocked ' + d);
-        blockerApply();
-      });
-      li.appendChild(name);
-      li.appendChild(rm);
-      list.appendChild(li);
-    });
-  }
-
-  render();
-  sec._refresh = render;
-  return sec;
-}
-
-
-
-function uiBuildPanel() {
-  const panel = document.createElement('div');
-  panel.id = PANEL_ID;
-
-  const title = document.createElement('h3');
-  title.textContent = '⚡ Crave';
-  panel.appendChild(title);
-
-  const featureRows = [
-    ['Domain blocker', 'blocker', () => { blockerApply(); }],
-    ['Nav hooks',      'nav',     () => { navInit(); }],
-  ];
-  featureRows.forEach(([label, key, cb]) => {
-    panel.appendChild(uiBuildToggleRow(label, key, cb));
-  });
-
-  panel.appendChild(Object.assign(document.createElement('div'), { className: 'crave-sep' }));
-  panel.appendChild(uiBuildBlocklistSection());
-
-  return panel;
-}
-
 function uiInit() {
   uiInjectStyles();
-
-  const btn = document.createElement('div');
-  btn.id = BTN_ID;
-  btn.textContent = '⚡';
-  btn.title = 'Crave settings';
-  document.body.appendChild(btn);
-
-  const panel = uiBuildPanel();
-  document.body.appendChild(panel);
-
-  btn.addEventListener('click', () => panel.classList.toggle('crave-open'));
-
-  document.addEventListener('click', e => {
-    if (!panel.contains(e.target) && e.target !== btn)
-      panel.classList.remove('crave-open');
-  });
-}
-
-function uiAttachDomainBtns(resultEl, domain) {
-  if (resultEl.querySelector('.crave-domain-btns')) return;
-
-  const wrap = document.createElement('span');
-  wrap.className = 'crave-domain-btns';
-
-  const blockBtn = document.createElement('button');
-  blockBtn.textContent = '✕ block';
-  blockBtn.title = 'Block ' + domain;
-  blockBtn.addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    cfgBlockDomain(domain);
-    blockerApply();
-    uiToast('Blocked ' + domain);
-    const bl = document.getElementById('crave-blocklist');
-    if (bl && bl.closest('div')._refresh) bl.closest('div')._refresh();
-  });
-
-  const boostBtn = document.createElement('button');
-  boostBtn.textContent = '▲ boost';
-  boostBtn.title = 'Boost ' + domain;
-  boostBtn.addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    cfgBoostDomain(domain);
-    blockerApply();
-    uiToast('Boosted ' + domain);
-  });
-
-  wrap.appendChild(blockBtn);
-  wrap.appendChild(boostBtn);
-
-  const titleEl = resultEl.querySelector('a[href], .title, h3');
-  if (titleEl) titleEl.appendChild(wrap);
-  else resultEl.appendChild(wrap);
-}
-
-// ---- google/blocker.js ----
-const RESULT_SELECTORS = [
-  '.fz-result',
-  '.snippet',
-  '[data-type="web"]',
-  '.result',
-];
-
-function blockerGetResultEls() {
-  for (const sel of RESULT_SELECTORS) {
-    const els = document.querySelectorAll(sel);
-    if (els.length) return Array.from(els);
-  }
-  return [];
-}
-
-function blockerDomainFromEl(el) {
-  const a = el.querySelector('a[href]');
-  if (!a) return null;
-  try {
-    return new URL(a.href).hostname.replace(/^www\./, '');
-  } catch (_) {
-    return null;
-  }
-}
-
-function blockerApply() {
-  if (!cfgFeatureOn('blocker')) return;
-
-  const results = blockerGetResultEls();
-  const container = results[0] && results[0].parentElement;
-
-  const boosted  = [];
-  const normal   = [];
-
-  results.forEach(el => {
-    const domain = blockerDomainFromEl(el);
-    if (!domain) { normal.push(el); return; }
-
-    if (cfgIsBlocked(domain)) {
-      el.style.display = 'none';
-      return;
-    }
-    el.style.display = '';
-
-    if (cfgFeatureOn('blocker')) uiAttachDomainBtns(el, domain);
-
-    if (cfgIsBoosted(domain)) boosted.push(el);
-    else normal.push(el);
-  });
-
-  if (container && boosted.length) {
-    const first = normal[0] || container.firstChild;
-    boosted.forEach(el => container.insertBefore(el, first));
-  }
-}
-
-function blockerObserve() {
-  const observer = new MutationObserver(() => blockerApply());
-  observer.observe(document.body, { childList: true, subtree: true });
-}
-
-function blockerInit() {
-  blockerApply();
-  blockerObserve();
 }
 
 // ---- google/lenses.js ----
-const LENS_PANEL_ID = 'crave-lens-panel';
+const LENS_LI_ID       = 'crave-lens-li';
+const LENS_DROPDOWN_ID = 'crave-lens-dropdown';
 
 const ALIAS_MAP = [
-  { alias: '@:',   expand: 'site:',     hint: 'site'      },
-  { alias: '.:',   expand: 'filetype:', hint: 'filetype'  },
-  { alias: '~:',   expand: 'related:',  hint: 'related'   },
-  { alias: 't:',   expand: 'intitle:',  hint: 'intitle'   },
-  { alias: 'u:',   expand: 'inurl:',    hint: 'inurl'     },
-  { alias: 'b:',   expand: 'before:',   hint: 'before'    },
-  { alias: 'a:',   expand: 'after:',    hint: 'after'     },
+  { alias: '@:',  expand: 'site:'     },
+  { alias: '.:',  expand: 'filetype:' },
+  { alias: '~:',  expand: 'related:'  },
+  { alias: 't:',  expand: 'intitle:'  },
+  { alias: 'u:',  expand: 'inurl:'    },
+  { alias: 'b:',  expand: 'before:'   },
+  { alias: 'a:',  expand: 'after:'    },
 ];
 
 const BUILTIN_LENSES = [
-  { name: 'GitHub',        prefix: 'site:github.com'                },
-  { name: 'Reddit',        prefix: 'site:reddit.com'                },
-  { name: 'MDN',           prefix: 'site:developer.mozilla.org'     },
-  { name: 'Wikipedia',     prefix: 'site:wikipedia.org'             },
-  { name: 'arXiv',         prefix: 'site:arxiv.org'                 },
-  { name: 'StackOverflow', prefix: 'site:stackoverflow.com'         },
-  { name: 'HN',            prefix: 'site:news.ycombinator.com'      },
-  { name: 'PDFs',          prefix: 'filetype:pdf'                   },
-  { name: 'Past week',     prefix: 'after:' + (() => {
-      const d = new Date(); d.setDate(d.getDate() - 7);
-      return d.toISOString().slice(0,10);
-    })()
-  },
-  { name: 'Past month',    prefix: 'after:' + (() => {
-      const d = new Date(); d.setMonth(d.getMonth() - 1);
-      return d.toISOString().slice(0,10);
-    })()
-  },
+  { name: 'GitHub',        prefix: 'site:github.com'            },
+  { name: 'Reddit',        prefix: 'site:reddit.com'            },
+  { name: 'MDN',           prefix: 'site:developer.mozilla.org' },
+  { name: 'Wikipedia',     prefix: 'site:wikipedia.org'         },
+  { name: 'arXiv',         prefix: 'site:arxiv.org'             },
+  { name: 'StackOverflow', prefix: 'site:stackoverflow.com'     },
+  { name: 'HN',            prefix: 'site:news.ycombinator.com'  },
+  { name: 'PDFs',          prefix: 'filetype:pdf'               },
 ];
-
-function lensesExpandAliases(raw) {
-  let q = raw;
-  for (const { alias, expand } of ALIAS_MAP) {
-    const re = new RegExp(alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    q = q.replace(re, expand);
-  }
-  return q;
-}
 
 function lensesGetQuery() {
   return new URLSearchParams(location.search).get('q') || '';
 }
 
 function lensesStripPrefixes(q) {
-  const all = [...BUILTIN_LENSES, ...cfgGet().lenses];
-  for (const l of all) q = q.replace(l.prefix, '').trim();
+  for (const l of [...BUILTIN_LENSES, ...cfgGet().lenses])
+    q = q.replace(l.prefix, '').trim();
   return q;
 }
 
@@ -493,280 +142,199 @@ function lensesApply(prefix) {
   location.href = u.toString();
 }
 
+function lensesExpandAliases(raw) {
+  let q = raw;
+  for (const { alias, expand } of ALIAS_MAP) {
+    const re = new RegExp(alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    q = q.replace(re, expand);
+  }
+  return q;
+}
+
 function lensesInjectStyles() {
   if (document.getElementById('crave-lens-styles')) return;
   const s = document.createElement('style');
   s.id = 'crave-lens-styles';
   s.textContent = `
-    #${LENS_PANEL_ID} {
+    #${LENS_LI_ID} a {
+      cursor: pointer;
+    }
+    #${LENS_DROPDOWN_ID} {
       position: fixed;
-      top: 120px; left: 0;
-      width: 168px;
+      z-index: 99999;
+      min-width: 180px;
       background: var(--color-bg-primary, #111);
-      border: 1px solid var(--color-border, #2a2a2a);
-      border-left: none;
-      border-radius: 0 10px 10px 0;
-      padding: 10px 0 12px;
-      z-index: 900;
-      box-shadow: 2px 0 16px rgba(0,0,0,.4);
-      font: 12px/1.5 system-ui, sans-serif;
-      color: var(--color-text-primary, #ddd);
-      transform: translateX(-152px);
-      transition: transform .2s ease;
+      border: 1px solid var(--divider-subtle, rgba(255,255,255,.1));
+      border-radius: 8px;
+      padding: 6px 0;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      display: none;
     }
-    #${LENS_PANEL_ID}:hover,
-    #${LENS_PANEL_ID}.crave-pinned {
-      transform: translateX(0);
-    }
-    #crave-lens-tab {
-      position: absolute; right: -22px; top: 50%;
-      transform: translateY(-50%);
-      writing-mode: vertical-rl;
-      font-size: 10px; color: #666;
-      padding: 8px 4px;
-      background: var(--color-bg-primary, #111);
-      border: 1px solid var(--color-border, #2a2a2a);
-      border-left: none;
-      border-radius: 0 6px 6px 0;
-      cursor: default;
-      letter-spacing: .08em;
-      user-select: none;
-    }
-    .crave-lens-section {
-      padding: 0 10px;
-      margin-bottom: 6px;
-    }
-    .crave-lens-heading {
-      font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-      color: #555; padding: 6px 10px 3px; user-select: none;
-    }
+    #${LENS_DROPDOWN_ID}.crave-open { display: block; }
+
     .crave-lens-chip {
       display: block; width: 100%;
       text-align: left;
-      font-size: 11px; padding: 3px 8px;
-      border-radius: 5px; border: none;
-      background: transparent;
-      color: var(--color-text-secondary, #aaa);
-      cursor: pointer; transition: all .12s;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 14px; line-height: 1.5;
+      padding: 5px 16px;
+      border: none; background: transparent;
+      color: var(--text-secondary, #aaa);
+      cursor: pointer; white-space: nowrap;
+      font-family: inherit;
     }
-    .crave-lens-chip:hover { background: var(--color-bg-secondary, #1e1e1e); color: #eee; }
+    .crave-lens-chip:hover {
+      background: var(--interactive-hover, rgba(255,255,255,.06));
+      color: var(--text-primary, #fff);
+    }
     .crave-lens-chip.crave-active {
-      color: var(--color-primary, #fa552a);
-      background: rgba(250,85,42,.08);
+      color: var(--focus-border, #fa552a);
+      font-weight: 500;
     }
+
     .crave-lens-sep {
-      height: 1px; background: var(--color-border, #2a2a2a); margin: 6px 10px;
+      height: 1px;
+      background: var(--divider-subtle, rgba(255,255,255,.08));
+      margin: 4px 0;
     }
-    .crave-alias-row {
-      display: flex; align-items: baseline; gap: 4px;
-      padding: 2px 8px; font-size: 10px;
+
+    .crave-alias-toggle {
+      display: block; width: 100%;
+      text-align: left;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-tertiary, #666);
+      padding: 6px 16px 3px;
+      border: none; background: transparent;
+      cursor: pointer; font-family: inherit;
     }
+    .crave-alias-toggle:hover { color: var(--text-primary, #fff); }
+
+    .crave-alias-table {
+      border-collapse: collapse;
+      font-size: 11px;
+      display: none; width: 100%;
+      padding: 0 16px 4px;
+      box-sizing: border-box;
+    }
+    .crave-alias-table.crave-open { display: table; }
+    .crave-alias-table td { padding: 2px 3px; vertical-align: middle; }
     .crave-alias-key {
-      font-family: monospace; font-size: 10px;
-      color: var(--color-primary, #fa552a);
-      min-width: 28px; flex-shrink: 0;
+      font-family: ui-monospace, monospace;
+      color: var(--focus-border, #fa552a);
     }
-    .crave-alias-val {
-      color: #555; font-size: 10px;
-    }
-    #crave-lens-input-wrap {
-      padding: 4px 10px 2px;
-      display: flex; gap: 4px;
-    }
-    #crave-lens-input {
-      flex: 1; font-size: 10px; padding: 3px 6px;
-      background: var(--color-bg-secondary, #1e1e1e);
-      border: 1px solid var(--color-border, #333);
-      border-radius: 4px; color: inherit;
-    }
-    #crave-lens-go {
-      font-size: 10px; padding: 3px 7px;
-      background: var(--color-primary, #fa552a);
-      border: none; border-radius: 4px; color: #fff; cursor: pointer;
+    .crave-alias-arrow { color: var(--text-tertiary, #555); padding: 0 4px; }
+    .crave-alias-expand {
+      color: var(--text-secondary, #888);
+      font-family: ui-monospace, monospace;
     }
   `;
   document.head.appendChild(s);
 }
 
-function lensesRender() {
-  const old = document.getElementById(LENS_PANEL_ID);
-  if (old) old.remove();
+function lensesCloseDropdown() {
+  const dd = document.getElementById(LENS_DROPDOWN_ID);
+  if (dd) dd.classList.remove('crave-open');
+}
 
-  if (!cfgFeatureOn('lenses')) return;
+function lensesBuildDropdown() {
+  let dd = document.getElementById(LENS_DROPDOWN_ID);
+  if (dd) dd.remove();
 
-  lensesInjectStyles();
-
-  const panel = document.createElement('div');
-  panel.id = LENS_PANEL_ID;
-
-  const tab = document.createElement('div');
-  tab.id = 'crave-lens-tab';
-  tab.textContent = 'LENSES';
-  panel.appendChild(tab);
+  dd = document.createElement('div');
+  dd.id = LENS_DROPDOWN_ID;
 
   const currentQ = lensesGetQuery();
 
-  const allLenses = [...BUILTIN_LENSES, ...cfgGet().lenses];
-  const h1 = document.createElement('div');
-  h1.className = 'crave-lens-heading';
-  h1.textContent = 'Quick lenses';
-  panel.appendChild(h1);
-
-  allLenses.forEach(lens => {
-    const btn = document.createElement('button');
-    btn.className = 'crave-lens-chip';
-    btn.textContent = lens.name;
-    btn.title = lens.prefix;
-    if (currentQ.includes(lens.prefix)) btn.classList.add('crave-active');
-    btn.addEventListener('click', () => lensesApply(lens.prefix));
-    panel.appendChild(btn);
+  [...BUILTIN_LENSES, ...cfgGet().lenses].forEach(lens => {
+    const chip = document.createElement('button');
+    chip.className = 'crave-lens-chip';
+    chip.textContent = lens.name;
+    chip.title = lens.prefix;
+    if (currentQ.includes(lens.prefix)) chip.classList.add('crave-active');
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      lensesCloseDropdown();
+      lensesApply(lens.prefix);
+    });
+    dd.appendChild(chip);
   });
 
-  const sep1 = document.createElement('div');
-  sep1.className = 'crave-lens-sep';
-  panel.appendChild(sep1);
+  const sep = document.createElement('div');
+  sep.className = 'crave-lens-sep';
+  dd.appendChild(sep);
 
-  const h2 = document.createElement('div');
-  h2.className = 'crave-lens-heading';
-  h2.textContent = 'Alias shortcuts';
-  panel.appendChild(h2);
+  const aliasToggle = document.createElement('button');
+  aliasToggle.className = 'crave-alias-toggle';
+  aliasToggle.textContent = 'Aliases ›';
 
+  const table = document.createElement('table');
+  table.className = 'crave-alias-table';
   ALIAS_MAP.forEach(({ alias, expand }) => {
-    const row = document.createElement('div');
-    row.className = 'crave-alias-row';
-    row.title = 'Type ' + alias + 'value in the box below';
-    const key = document.createElement('span');
-    key.className = 'crave-alias-key';
-    key.textContent = alias;
-    const val = document.createElement('span');
-    val.className = 'crave-alias-val';
-    val.textContent = '→ ' + expand;
-    row.appendChild(key);
-    row.appendChild(val);
-    panel.appendChild(row);
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="crave-alias-key">${alias}</td>` +
+      `<td class="crave-alias-arrow">→</td>` +
+      `<td class="crave-alias-expand">${expand}</td>`;
+    table.appendChild(tr);
   });
 
-  const sep2 = document.createElement('div');
-  sep2.className = 'crave-lens-sep';
-  panel.appendChild(sep2);
-
-  const h3 = document.createElement('div');
-  h3.className = 'crave-lens-heading';
-  h3.textContent = 'Search with alias';
-  panel.appendChild(h3);
-
-  const inputWrap = document.createElement('div');
-  inputWrap.id = 'crave-lens-input-wrap';
-
-  const input = document.createElement('input');
-  input.id = 'crave-lens-input';
-  input.placeholder = '@:github.com query';
-  input.spellcheck = false;
-
-  const go = document.createElement('button');
-  go.id = 'crave-lens-go';
-  go.textContent = '→';
-
-  function runAlias() {
-    const raw = input.value.trim();
-    if (!raw) return;
-    const expanded = lensesExpandAliases(raw);
-    const u = new URL(location.href);
-    u.searchParams.set('q', expanded);
-    location.href = u.toString();
-  }
-
-  go.addEventListener('click', runAlias);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') runAlias(); });
-
-  inputWrap.appendChild(input);
-  inputWrap.appendChild(go);
-  panel.appendChild(inputWrap);
-
-  document.body.appendChild(panel);
-
-  const obs = new MutationObserver(() => {
-    if (!document.getElementById(LENS_PANEL_ID)) lensesRender();
+  aliasToggle.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = table.classList.toggle('crave-open');
+    aliasToggle.textContent = open ? 'Aliases ‹' : 'Aliases ›';
   });
-  obs.observe(document.body, { childList: true });
+
+  dd.appendChild(aliasToggle);
+  dd.appendChild(table);
+
+  document.body.appendChild(dd);
+  return dd;
 }
 
-// ---- google/nav.js ----
-function navGetQuery() {
-  return new URLSearchParams(location.search).get('q') || '';
-}
+function lensesInjectTab(ul) {
+  if (document.getElementById(LENS_LI_ID)) return;
 
-function mapsOpen(q) {
-  const url = 'https://www.google.com/maps/search/' + encodeURIComponent(q);
-  const sw   = screen.availWidth;
-  const sh   = screen.availHeight;
-  const w    = Math.min(900, sw - 80);
-  const h    = Math.min(650, sh - 80);
-  const left = Math.round((sw - w) / 2);
-  const top  = Math.round((sh - h) / 2);
-  window.open(
-    url,
-    'crave_maps',
-    'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top +
-    ',resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no'
-  );
-}
+  const currentQ = lensesGetQuery();
+  const hasActive = [...BUILTIN_LENSES, ...cfgGet().lenses]
+    .some(l => currentQ.includes(l.prefix));
 
-function navOnKey(e) { if (e.key === 'Escape') {} }
-
-function navInjectFlights(ul, q) {
-  if (ul.querySelector('[data-crave-flights]')) return;
   const li = document.createElement('li');
+  li.id = LENS_LI_ID;
   li.className = 'tab-item svelte-l0weru';
-  li.setAttribute('data-crave-flights', '1');
+
   const a = document.createElement('a');
   a.className = 'desktop-default-semibold svelte-l0weru';
-  a.href      = 'https://www.google.com/travel/flights?q=' + encodeURIComponent(q);
-  a.target    = '_blank';
-  a.rel       = 'noopener noreferrer';
-  a.innerHTML = '<span>Flights</span>';
-  li.appendChild(a);
-  const mapsLi = (ul.querySelector('a[href*="/maps/search"]') || {closest: ()=>null}).closest('li');
-  if (mapsLi) mapsLi.after(li);
-  else ul.appendChild(li);
-}
+  a.textContent = hasActive ? 'Lenses ●' : 'Lenses';
+  a.style.cursor = 'pointer';
+  if (hasActive) a.style.color = 'var(--focus-border, #fa552a)';
 
-function navHook(ul) {
-  const q = navGetQuery();
-  if (!q) return;
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
 
-  ul.querySelectorAll('.tab-item a').forEach(a => {
-    if (a.dataset.craveHooked) return;
-    a.dataset.craveHooked = '1';
-    const href = a.getAttribute('href') || '';
-
-    if (href.includes('/maps/search')) {
-      a.addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        mapsOpen(new URLSearchParams(new URL(a.href, location.origin).search).get('q') || q);
-      });
-    }
-
-    if (href.includes('/images')) {
-      a.addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(q), '_blank', 'noopener noreferrer');
-      });
-    }
+    const dd = lensesBuildDropdown();
+    const rect = a.getBoundingClientRect();
+    dd.style.top  = (rect.bottom + 4) + 'px';
+    dd.style.left = rect.left + 'px';
+    dd.classList.toggle('crave-open');
   });
 
-  navInjectFlights(ul, q);
+  li.appendChild(a);
+  ul.appendChild(li);
 }
 
-function navInit() {
+function lensesRender() {
+  if (!cfgFeatureOn('lenses')) return;
+  lensesInjectStyles();
+
+  document.addEventListener('click', lensesCloseDropdown);
+
   craveWaitFor('#primary-tabs', ul => {
-    navHook(ul);
+    lensesInjectTab(ul);
+
     const obs = new MutationObserver(() => {
       const current = document.querySelector('#primary-tabs');
-      if (current) navHook(current);
+      if (current) lensesInjectTab(current);
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
   });
@@ -790,9 +358,13 @@ function navInit() {
   }
 
   function craveMain() {
-    if (cfgFeatureOn('blocker')) blockerInit();
-    if (cfgFeatureOn('lenses'))  lensesRender();
-    if (cfgFeatureOn('nav'))     navInit();
+    if (cfgFeatureOn('lenses'))     lensesRender();
+    if (cfgFeatureOn('bang'))       bangInit();
+    if (cfgFeatureOn('categories')) categoriesInit();
+    if (cfgFeatureOn('answered'))   answeredInit();
+    if (cfgFeatureOn('tracker'))    trackerInit();
+    if (cfgFeatureOn('archive'))    archiveInit();
+    if (cfgFeatureOn('within'))     withinInit();
   }
 
   if (document.readyState === 'loading') {
@@ -800,6 +372,584 @@ function navInit() {
   } else {
     craveMain();
   }
+
+// ---- kagi/bang.js ----
+const BANGS = {
+  '!g':    q => 'https://www.google.com/search?q=' + q,
+  '!yt':   q => 'https://www.youtube.com/results?search_query=' + q,
+  '!gh':   q => 'https://github.com/search?q=' + q,
+  '!mdn':  q => 'https://developer.mozilla.org/en-US/search?q=' + q,
+  '!w':    q => 'https://en.wikipedia.org/w/index.php?search=' + q,
+  '!so':   q => 'https://stackoverflow.com/search?q=' + q,
+  '!r':    q => 'https://www.reddit.com/search/?q=' + q,
+  '!d':    q => 'https://duckduckgo.com/?q=' + q,
+  '!maps': q => 'https://www.google.com/maps/search/' + q,
+  '!img':  q => 'https://www.google.com/search?tbm=isch&q=' + q,
+  '!a':    q => 'https://www.amazon.com/s?k=' + q,
+  '!npm':  q => 'https://www.npmjs.com/search?q=' + q,
+  '!pypi': q => 'https://pypi.org/search/?q=' + q,
+  '!tw':   q => 'https://twitter.com/search?q=' + q,
+  '!hn':   q => 'https://hn.algolia.com/?q=' + q,
+  '!arch': q => 'https://wiki.archlinux.org/index.php?search=' + q,
+  '!wb':   q => 'https://web.archive.org/web/*/' + q,
+  '!ddg':  q => 'https://duckduckgo.com/?q=' + q,
+  '!sx':   q => 'https://stackexchange.com/search?q=' + q,
+};
+
+function bangParse(raw) {
+  const parts = raw.trim().split(/\s+/);
+  for (let i = 0; i < parts.length; i++) {
+    const token = parts[i].toLowerCase();
+    if (BANGS[token]) {
+      const rest = parts.filter((_, j) => j !== i).join(' ');
+      return { bang: token, query: rest };
+    }
+  }
+  return null;
+}
+
+function bangIntercept(e) {
+  const input = document.querySelector('input[type="search"], input[name="q"]');
+  if (!input) return;
+  const raw = input.value.trim();
+  if (!raw) return;
+  const match = bangParse(raw);
+  if (!match) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const url = BANGS[match.bang](encodeURIComponent(match.query));
+  window.open(url, '_blank', 'noopener noreferrer');
+}
+
+function bangInit() {
+  craveWaitFor('form[role="search"], form.search-form, form', form => {
+    form.addEventListener('submit', bangIntercept, true);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const active = document.activeElement;
+    if (!active) return;
+    const tag = active.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+    bangIntercept(e);
+  }, true);
+}
+
+// ---- kagi/categories.js ----
+const CAT_FORUMS = [
+  'reddit.com','quora.com','stackexchange.com','stackoverflow.com',
+  'news.ycombinator.com','discourse.org','boards.4chan.org','forum.',
+  'forums.','community.','discuss.','answers.yahoo.com',
+];
+
+const CAT_SOCIAL = [
+  'twitter.com','x.com','facebook.com','instagram.com','tiktok.com',
+  'linkedin.com','pinterest.com','tumblr.com','mastodon.social',
+];
+
+const CAT_AGG = [
+  'msn.com','yahoo.com','flipboard.com','feedly.com','alltop.com',
+  'news.google.com','smartnews.com','upday.com',
+];
+
+const CAT_SEO = [
+  'hubspot.com','semrush.com','Neil Patel','searchenginejournal.com',
+  'searchengineland.com','backlinko.com','ahrefs.com',
+  'ezinearticles.com','articlesbase.com','goarticles.com',
+  'medium.com','substack.com',
+];
+
+const LISTICLE_RE = /\b(\d+)\s+(best|top|worst|ways|tips|tricks|things|reasons|facts|ideas|hacks|mistakes|steps|tools|apps|plugins|secrets|examples|signs|types|methods)\b/i;
+
+const CAT_DEMOTE_OPACITY = '0.45';
+
+function catDomainMatches(domain, list) {
+  return list.some(p => domain.includes(p));
+}
+
+function catIsListicle(el) {
+  const title = el.querySelector('a[href], h3, .title');
+  return title && LISTICLE_RE.test(title.textContent);
+}
+
+function catBadge(el, label, color) {
+  if (el.querySelector('.crave-cat-badge')) return;
+  const b = document.createElement('span');
+  b.className = 'crave-cat-badge';
+  b.textContent = label;
+  b.style.cssText = [
+    'font-size:9px', 'padding:1px 5px', 'border-radius:3px',
+    'margin-left:6px', 'vertical-align:middle',
+    'border:1px solid ' + color,
+    'color:' + color,
+    'opacity:.7',
+  ].join(';');
+  const anchor = el.querySelector('a[href]');
+  if (anchor) anchor.appendChild(b);
+}
+
+function catFoldListicle(el) {
+  if (el.dataset.craveListicleFolded) return;
+  el.dataset.craveListicleFolded = '1';
+
+  const orig = el.style.cssText;
+  el.style.cssText += ';max-height:48px;overflow:hidden;position:relative;';
+
+  const expand = document.createElement('button');
+  expand.className = 'crave-listicle-expand';
+  expand.textContent = '▼ listicle';
+  expand.style.cssText = [
+    'position:absolute', 'bottom:2px', 'right:6px',
+    'font-size:9px', 'padding:1px 7px', 'border-radius:4px',
+    'border:1px solid #555', 'background:#111',
+    'color:#888', 'cursor:pointer',
+  ].join(';');
+  expand.addEventListener('click', e => {
+    e.stopPropagation();
+    el.style.cssText = orig;
+    expand.remove();
+    delete el.dataset.craveListicleFolded;
+  });
+  el.style.position = 'relative';
+  el.appendChild(expand);
+}
+
+function catInjectStyles() {
+  if (document.getElementById('crave-cat-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-cat-styles';
+  s.textContent = `
+    .crave-cat-demoted { opacity: ${CAT_DEMOTE_OPACITY}; transition: opacity .2s; }
+    .crave-cat-demoted:hover { opacity: 1; }
+  `;
+  document.head.appendChild(s);
+}
+
+function catApply() {
+  catInjectStyles();
+
+  const results = [];
+  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) { els.forEach(e => results.push(e)); break; }
+  }
+
+  results.forEach(el => {
+    if (el.dataset.craveCateg) return;
+    el.dataset.craveCateg = '1';
+
+    const a = el.querySelector('a[href]');
+    if (!a) return;
+    let domain = '';
+    try { domain = new URL(a.href).hostname.replace(/^www\./, ''); } catch (_) { return; }
+
+    if (catDomainMatches(domain, CAT_FORUMS)) {
+      el.classList.add('crave-cat-demoted');
+      catBadge(el, 'forum', '#888');
+    } else if (catDomainMatches(domain, CAT_SOCIAL)) {
+      el.classList.add('crave-cat-demoted');
+      catBadge(el, 'social', '#8888cc');
+    } else if (catDomainMatches(domain, CAT_AGG)) {
+      el.classList.add('crave-cat-demoted');
+      catBadge(el, 'aggregator', '#cc8844');
+    } else if (catDomainMatches(domain, CAT_SEO)) {
+      el.classList.add('crave-cat-demoted');
+      catBadge(el, 'SEO', '#cc4444');
+    }
+
+    if (catIsListicle(el)) {
+      catBadge(el, 'listicle', '#6699aa');
+      catFoldListicle(el);
+    }
+  });
+}
+
+function categoriesInit() {
+  catApply();
+  new MutationObserver(catApply)
+    .observe(document.body, { childList: true, subtree: true });
+}
+
+// ---- kagi/answered.js ----
+const ANSWERED_KEY = 'crave_answered';
+
+function answeredLoad() {
+  try { return JSON.parse(GM_getValue(ANSWERED_KEY, '{}')); }
+  catch (_) { return {}; }
+}
+
+function answeredSave(data) {
+  GM_setValue(ANSWERED_KEY, JSON.stringify(data));
+}
+
+function answeredMark(url, title) {
+  const data = answeredLoad();
+  if (data[url]) {
+    delete data[url];
+  } else {
+    data[url] = { title, ts: Date.now() };
+  }
+  answeredSave(data);
+  return !!data[url];
+}
+
+function answeredIsMarked(url) {
+  return !!answeredLoad()[url];
+}
+
+function answeredInjectStyles() {
+  if (document.getElementById('crave-answered-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-answered-styles';
+  s.textContent = `
+    .crave-answered-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; padding: 0 3px;
+      opacity: 0; transition: opacity .15s;
+      vertical-align: middle; line-height: 1;
+      color: #888;
+    }
+    .crave-answered-btn.crave-marked {
+      opacity: 1 !important; color: #f5a623;
+    }
+    .fz-result:hover .crave-answered-btn,
+    .snippet:hover .crave-answered-btn,
+    [data-type="web"]:hover .crave-answered-btn { opacity: .6; }
+    .crave-answered-btn:hover { opacity: 1 !important; }
+  `;
+  document.head.appendChild(s);
+}
+
+function answeredApply() {
+  answeredInjectStyles();
+
+  const results = [];
+  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) { els.forEach(e => results.push(e)); break; }
+  }
+
+  results.forEach(el => {
+    if (el.querySelector('.crave-answered-btn')) return;
+
+    const a = el.querySelector('a[href]');
+    if (!a) return;
+
+    const url   = a.href;
+    const title = (el.querySelector('h3, .title') || a).textContent.trim();
+
+    const btn = document.createElement('button');
+    btn.className   = 'crave-answered-btn';
+    btn.title       = 'This answered it';
+    btn.textContent = '★';
+
+    if (answeredIsMarked(url)) btn.classList.add('crave-marked');
+
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const now = answeredMark(url, title);
+      btn.classList.toggle('crave-marked', now);
+      uiToast(now ? '★ Marked as answered' : '☆ Unmarked');
+    });
+
+    const titleEl = el.querySelector('h3, .title, a[href]');
+    if (titleEl) titleEl.appendChild(btn);
+    else el.appendChild(btn);
+  });
+}
+
+function answeredInit() {
+  answeredApply();
+  new MutationObserver(answeredApply)
+    .observe(document.body, { childList: true, subtree: true });
+}
+
+// ---- kagi/tracker.js ----
+const TRACKER_HIGH = [
+  'facebook.com','instagram.com','doubleclick.net','adnxs.com',
+  'scorecardresearch.com','quantserve.com','krxd.net','rfihub.com',
+  'taboola.com','outbrain.com','rubiconproject.com','openx.net',
+  'pubmatic.com','casalemedia.com','advertising.com','adroll.com',
+  'hotjar.com','mouseflow.com','fullstory.com','heap.io',
+];
+
+const TRACKER_MED = [
+  'google-analytics.com','googletagmanager.com','googleadservices.com',
+  'twitter.com','linkedin.com','pinterest.com','snapchat.com',
+  'amazon-adsystem.com','media.net','criteo.com','yandex.ru',
+  'optimizely.com','segment.com','amplitude.com','mixpanel.com',
+  'intercom.io','drift.com','zendesk.com','freshdesk.com',
+];
+
+const TRACKER_LOW = [
+  'cloudflare.com','akamai.com','fastly.com',
+  'newrelic.com','datadog.com','sentry.io',
+  'disqus.com','livechat.com','tawk.to',
+];
+
+function trackerScore(domain) {
+  if (TRACKER_HIGH.some(t => domain.includes(t))) return 3;
+  if (TRACKER_MED.some(t => domain.includes(t)))  return 2;
+  if (TRACKER_LOW.some(t => domain.includes(t)))  return 1;
+  return 0;
+}
+
+const TRACKER_LABELS = ['', '⚠ low', '⚠ med', '🔴 high'];
+const TRACKER_COLORS = ['', '#888844', '#cc8833', '#cc3333'];
+
+function trackerInjectStyles() {
+  if (document.getElementById('crave-tracker-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-tracker-styles';
+  s.textContent = `
+    .crave-tracker-badge {
+      font-size: 9px; padding: 1px 5px; border-radius: 3px;
+      margin-left: 5px; vertical-align: middle;
+      border: 1px solid currentColor;
+      opacity: .75; cursor: default;
+      font-family: system-ui, sans-serif;
+    }
+    .crave-tracker-badge:hover { opacity: 1; }
+  `;
+  document.head.appendChild(s);
+}
+
+function trackerApply() {
+  trackerInjectStyles();
+
+  const results = [];
+  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) { els.forEach(e => results.push(e)); break; }
+  }
+
+  results.forEach(el => {
+    if (el.querySelector('.crave-tracker-badge')) return;
+
+    const a = el.querySelector('a[href]');
+    if (!a) return;
+
+    let domain = '';
+    try { domain = new URL(a.href).hostname.replace(/^www\./, ''); }
+    catch (_) { return; }
+
+    const score = trackerScore(domain);
+    if (score === 0) return;
+
+    const badge = document.createElement('span');
+    badge.className   = 'crave-tracker-badge';
+    badge.textContent = TRACKER_LABELS[score];
+    badge.style.color = TRACKER_COLORS[score];
+    badge.title       = 'Tracker risk: ' + ['none','low','medium','high'][score];
+
+    const anchor = el.querySelector('a[href]');
+    if (anchor) anchor.appendChild(badge);
+  });
+}
+
+function trackerInit() {
+  trackerApply();
+  new MutationObserver(trackerApply)
+    .observe(document.body, { childList: true, subtree: true });
+}
+
+// ---- kagi/archive.js ----
+function archiveInjectStyles() {
+  if (document.getElementById('crave-archive-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-archive-styles';
+  s.textContent = `
+    .crave-archive-link {
+      font-size: 10px; padding: 1px 6px; border-radius: 3px;
+      margin-left: 6px; vertical-align: middle;
+      border: 1px solid #444; color: #777;
+      text-decoration: none; white-space: nowrap;
+      opacity: 0; transition: opacity .15s;
+      font-family: system-ui, sans-serif;
+    }
+    .fz-result:hover .crave-archive-link,
+    .snippet:hover .crave-archive-link,
+    [data-type="web"]:hover .crave-archive-link { opacity: 1; }
+    .crave-archive-link:hover {
+      border-color: var(--color-primary, #fa552a);
+      color: var(--color-primary, #fa552a);
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+function archiveApply() {
+  archiveInjectStyles();
+
+  const results = [];
+  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) { els.forEach(e => results.push(e)); break; }
+  }
+
+  results.forEach(el => {
+    if (el.querySelector('.crave-archive-link')) return;
+
+    const a = el.querySelector('a[href]');
+    if (!a) return;
+
+    let url = '';
+    try {
+      const parsed = new URL(a.href);
+      if (!parsed.protocol.startsWith('http')) return;
+      url = parsed.href;
+    } catch (_) { return; }
+
+    const link = document.createElement('a');
+    link.className  = 'crave-archive-link';
+    link.href       = 'https://web.archive.org/web/*/' + url;
+    link.target     = '_blank';
+    link.rel        = 'noopener noreferrer';
+    link.textContent = '📦 archive';
+    link.title      = 'View on Wayback Machine';
+
+    const urlLine = el.querySelector(
+      '.url-breadcrumb, .fz-result__url, .snippet__url, [class*="url"], cite'
+    );
+    if (urlLine) urlLine.appendChild(link);
+    else a.appendChild(link);
+  });
+}
+
+function archiveInit() {
+  archiveApply();
+  new MutationObserver(archiveApply)
+    .observe(document.body, { childList: true, subtree: true });
+}
+
+// ---- kagi/within.js ----
+const WITHIN_BAR_ID = 'crave-within-bar';
+let withinActive = '';
+
+function withinInjectStyles() {
+  if (document.getElementById('crave-within-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-within-styles';
+  s.textContent = `
+    #${WITHIN_BAR_ID} {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 0 3px;
+      font-family: system-ui, sans-serif;
+    }
+    #crave-within-input {
+      font-size: 11px; padding: 3px 8px;
+      background: var(--color-bg-secondary, #1e1e1e);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 6px; color: inherit;
+      width: 180px; transition: border-color .12s;
+    }
+    #crave-within-input:focus {
+      outline: none;
+      border-color: var(--color-primary, #fa552a);
+    }
+    #crave-within-clear {
+      font-size: 11px; padding: 2px 8px; border-radius: 6px;
+      border: 1px solid var(--color-border, #333);
+      background: transparent; color: #888; cursor: pointer;
+      display: none;
+    }
+    #crave-within-clear.crave-visible { display: block; }
+    #crave-within-clear:hover { color: #fa552a; border-color: #fa552a; }
+    #crave-within-count {
+      font-size: 10px; color: #555;
+    }
+    .crave-within-hidden { display: none !important; }
+  `;
+  document.head.appendChild(s);
+}
+
+function withinGetResults() {
+  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) return Array.from(els);
+  }
+  return [];
+}
+
+function withinFilter(term) {
+  withinActive = term.toLowerCase().trim();
+  const results = withinGetResults();
+  let shown = 0;
+
+  results.forEach(el => {
+    if (!withinActive) {
+      el.classList.remove('crave-within-hidden');
+      shown++;
+      return;
+    }
+    const text = el.textContent.toLowerCase();
+    if (text.includes(withinActive)) {
+      el.classList.remove('crave-within-hidden');
+      shown++;
+    } else {
+      el.classList.add('crave-within-hidden');
+    }
+  });
+
+  const count = document.getElementById('crave-within-count');
+  if (count) {
+    count.textContent = withinActive
+      ? shown + ' of ' + results.length + ' results'
+      : '';
+  }
+
+  const clear = document.getElementById('crave-within-clear');
+  if (clear) clear.classList.toggle('crave-visible', !!withinActive);
+}
+
+function withinRender() {
+  if (document.getElementById(WITHIN_BAR_ID)) return;
+
+  withinInjectStyles();
+
+  const bar = document.createElement('div');
+  bar.id = WITHIN_BAR_ID;
+
+  const input = document.createElement('input');
+  input.id          = 'crave-within-input';
+  input.type        = 'text';
+  input.placeholder = '🔍 filter results…';
+  input.spellcheck  = false;
+
+  const clear = document.createElement('button');
+  clear.id          = 'crave-within-clear';
+  clear.textContent = '✕ clear';
+  clear.addEventListener('click', () => {
+    input.value = '';
+    withinFilter('');
+    input.focus();
+  });
+
+  const count = document.createElement('span');
+  count.id = 'crave-within-count';
+
+  input.addEventListener('input', () => withinFilter(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { input.value = ''; withinFilter(''); }
+  });
+
+  bar.appendChild(input);
+  bar.appendChild(clear);
+  bar.appendChild(count);
+
+  craveWaitFor('#primary-tabs', tabs => {
+    const nav = tabs.closest('nav') || tabs.parentElement;
+    if (nav && nav.parentElement) {
+      nav.parentElement.insertBefore(bar, nav.nextSibling);
+    }
+  });
+}
+
+function withinInit() {
+  withinRender();
+}
 
 // ---- end.js ----
 })();

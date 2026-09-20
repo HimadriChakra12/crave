@@ -23,18 +23,26 @@ listextra(
     { "downloadURL", "https://raw.githubusercontent.com/HimadriChakra12/bundlejs/main/dist/crave.user.js" },
     );
 
-#define GROUPNAME group( \
+#define GOOGLE group( \
     "src/google/config.js", \
     "src/google/ui.js",     \
-    "src/google/blocker.js",\
     "src/google/lenses.js", \
-    "src/google/nav.js",    \
     "src/google/main.js",   \
+    )
+
+#define KAGI group( \
+    "src/kagi/bang.js",       \
+    "src/kagi/categories.js", \
+    "src/kagi/answered.js",   \
+    "src/kagi/tracker.js",    \
+    "src/kagi/archive.js",    \
+    "src/kagi/within.js",     \
     )
 
 listorder(
     "src/start.js",
-    GROUPNAME
+    GOOGLE
+    KAGI
     "src/end.js",
     );
 

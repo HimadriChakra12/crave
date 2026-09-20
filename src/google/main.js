@@ -16,9 +16,13 @@
   }
 
   function craveMain() {
-    if (cfgFeatureOn('blocker')) blockerInit();
-    if (cfgFeatureOn('lenses'))  lensesRender();
-    if (cfgFeatureOn('nav'))     navInit();
+    if (cfgFeatureOn('lenses'))     lensesRender();
+    if (cfgFeatureOn('bang'))       bangInit();
+    if (cfgFeatureOn('categories')) categoriesInit();
+    if (cfgFeatureOn('answered'))   answeredInit();
+    if (cfgFeatureOn('tracker'))    trackerInit();
+    if (cfgFeatureOn('archive'))    archiveInit();
+    if (cfgFeatureOn('within'))     withinInit();
   }
 
   if (document.readyState === 'loading') {
