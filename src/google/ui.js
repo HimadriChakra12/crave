@@ -29,6 +29,15 @@ function uiToast(msg, duration) {
   el._t = setTimeout(() => el.classList.remove('crave-show'), duration);
 }
 
+function uiHideSidebarCTA() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .set-default { display: none !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 function uiInit() {
   uiInjectStyles();
+  uiHideSidebarCTA();
 }

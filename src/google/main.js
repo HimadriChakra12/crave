@@ -16,6 +16,7 @@
   }
 
   function craveMain() {
+    settingsInit();
     if (cfgFeatureOn('lenses'))     lensesRender();
     if (cfgFeatureOn('bang'))       bangInit();
     if (cfgFeatureOn('categories')) categoriesInit();

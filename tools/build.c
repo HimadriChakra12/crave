@@ -24,10 +24,11 @@ listextra(
     );
 
 #define GOOGLE group( \
-    "src/google/config.js", \
-    "src/google/ui.js",     \
-    "src/google/lenses.js", \
-    "src/google/main.js",   \
+    "src/google/config.js",   \
+    "src/google/ui.js",       \
+    "src/google/lenses.js",   \
+    "src/google/settings.js", \
+    "src/google/main.js",     \
     )
 
 #define KAGI group( \
