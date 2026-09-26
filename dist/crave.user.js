@@ -2,7 +2,7 @@
 // @name         Crave
 // @namespace    https://github.com/HimadriChakra12/bundlejs
 // @version      3.0.0
-// @description  Kagi-like power features on Brave Search: domain blocking/boosting, lenses, Google quick-links, Wikipedia infobox, inline calculator, Google Maps popup
+// @description  Kagi-like power features on Brave Search: domain blocking/boosting, lenses, Google quick-links, Wikipedia infobox, inline calculator, Google Maps popup, plus a lightweight mode that trims trackers/autoplay/animations for lower RAM/CPU/network use
 // @match        https://search.brave.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -17,6 +17,140 @@
 (() => {
   'use strict';
 
+// ---- prefs/observer.js ----
+let _prefsObserverCallbacks = [];
+let _prefsObserverInstance  = null;
+let _prefsObserverPending   = false;
+let _prefsObserverPaused    = false;
+
+function prefsIdle(cb) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(cb, { timeout: 400 });
+  else setTimeout(cb, 120);
+}
+
+function prefsFlushObservers() {
+  _prefsObserverPending = false;
+  if (_prefsObserverPaused) return;
+  _prefsObserverCallbacks.forEach(fn => {
+    try { fn(); } catch (_) { /* one bad feature shouldn't sink the rest */ }
+  });
+}
+
+function prefsScheduleFlush() {
+  if (_prefsObserverPending || _prefsObserverPaused) return;
+  _prefsObserverPending = true;
+  prefsIdle(prefsFlushObservers);
+}
+
+function prefsSharedObserve(fn) {
+  _prefsObserverCallbacks.push(fn);
+  fn();
+
+  if (!_prefsObserverInstance) {
+    _prefsObserverInstance = new MutationObserver(prefsScheduleFlush);
+    _prefsObserverInstance.observe(document.body, { childList: true, subtree: true });
+
+    document.addEventListener('visibilitychange', () => {
+      _prefsObserverPaused = document.hidden;
+      if (!_prefsObserverPaused) prefsScheduleFlush();
+    });
+  }
+}
+
+// ---- prefs/network.js ----
+const PREFS_BLOCK_HOSTS = [
+  'doubleclick.net', 'googlesyndication.com', 'googletagmanager.com',
+  'google-analytics.com', 'googleadservices.com', 'adservice.google.com',
+  'facebook.net', 'connect.facebook.net', 'scorecardresearch.com',
+  'adnxs.com', 'taboola.com', 'outbrain.com', 'hotjar.com',
+  'fullstory.com', 'mouseflow.com', 'segment.com', 'segment.io',
+  'amplitude.com', 'mixpanel.com', 'criteo.com', 'quantserve.com',
+  'rubiconproject.com', 'openx.net', 'pubmatic.com',
+];
+
+function prefsHostBlocked(url) {
+  try {
+    const h = new URL(url, location.href).hostname.replace(/^www\./, '');
+    return PREFS_BLOCK_HOSTS.some(b => h === b || h.endsWith('.' + b));
+  } catch (_) {
+    return false;
+  }
+}
+
+function prefsStripIfTracker(el) {
+  const src = el.getAttribute('src');
+  if (!src || !prefsHostBlocked(src)) return;
+  el.remove();
+}
+
+function prefsSweepNetwork(root) {
+  root.querySelectorAll('script[src], iframe[src], img[src]')
+    .forEach(prefsStripIfTracker);
+}
+
+function prefsNetworkInit() {
+  if (!cfgFeatureOn('perfKillTrackers')) return;
+  prefsSweepNetwork(document);
+  prefsSharedObserve(() => prefsSweepNetwork(document.body));
+}
+
+// ---- prefs/media.js ----
+function prefsTameMedia(root) {
+  if (cfgFeatureOn('perfNoAutoplay')) {
+    root.querySelectorAll('video, audio').forEach(m => {
+      m.autoplay = false;
+      m.preload  = 'none';
+      if (!m.paused) m.pause();
+    });
+  }
+
+  if (cfgFeatureOn('perfLazyMedia')) {
+    root.querySelectorAll('img:not([loading])').forEach(img => {
+      img.loading  = 'lazy';
+      img.decoding = 'async';
+    });
+    root.querySelectorAll('iframe:not([loading])').forEach(f => {
+      f.loading = 'lazy';
+    });
+  }
+}
+
+function prefsMediaInit() {
+  if (!cfgFeatureOn('perfNoAutoplay') && !cfgFeatureOn('perfLazyMedia')) return;
+  prefsTameMedia(document);
+  prefsSharedObserve(() => prefsTameMedia(document.body));
+}
+
+// ---- prefs/motion.js ----
+function prefsInjectMotionStyles() {
+  if (document.getElementById('crave-prefs-motion')) return;
+  const s = document.createElement('style');
+  s.id = 'crave-prefs-motion';
+  s.textContent = `
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+function prefsMotionInit() {
+  if (!cfgFeatureOn('perfNoAnim')) return;
+  prefsInjectMotionStyles();
+}
+
+// ---- prefs/main.js ----
+function prefsInit() {
+  prefsMotionInit();
+  prefsNetworkInit();
+  prefsMediaInit();
+}
+
 // ---- google/config.js ----
 const CFG_KEY = 'crave_cfg';
 
@@ -26,10 +160,13 @@ const DEFAULTS = {
     lenses:     true,
     bang:       true,
     categories: true,
-    answered:   true,
     tracker:    true,
     archive:    true,
     within:     true,
+    perfKillTrackers: true,
+    perfNoAutoplay:   true,
+    perfLazyMedia:    true,
+    perfNoAnim:       true,
   },
 };
 
@@ -358,10 +495,13 @@ const CRAVE_FEATURES = [
   { key: 'lenses',     label: 'Lenses',          desc: 'Quick site filter dropdown in the nav bar',    icon: '🔍', color: '#212848' },
   { key: 'bang',       label: 'Bangs',            desc: '!yt, !gh, !mdn … redirect shortcuts',          icon: '!',  color: '#212848' },
   { key: 'categories', label: 'Category demote',  desc: 'Fade forums, social, SEO farms and listicles', icon: '🏷', color: '#212848' },
-  { key: 'answered',   label: 'Answered star',    desc: 'Mark results that answered your query',        icon: '★',  color: '#212848' },
   { key: 'tracker',    label: 'Tracker badges',   desc: 'Show tracker risk on results',                 icon: '🛡', color: '#212848' },
   { key: 'archive',    label: 'Archive link',     desc: 'Wayback Machine link on each result',          icon: '📦', color: '#212848' },
   { key: 'within',     label: 'Filter results',   desc: 'Instant text filter across visible results',   icon: '⚡', color: '#212848' },
+  { key: 'perfKillTrackers', label: 'Kill trackers',   desc: 'Strip known ad/analytics scripts, iframes, pixels', icon: '🚫', color: '#212848' },
+  { key: 'perfNoAutoplay',   label: 'No autoplay',     desc: 'Pause video/audio, skip preloading media',          icon: '⏸',  color: '#212848' },
+  { key: 'perfLazyMedia',    label: 'Lazy media',      desc: 'Defer off-screen images/iframes until scrolled to', icon: '🐢', color: '#212848' },
+  { key: 'perfNoAnim',       label: 'Cut animations',  desc: 'Collapse transitions/animations to save CPU/GPU',   icon: '🧊', color: '#212848' },
 ];
 
 function settingsInjectStyles() {
@@ -537,11 +677,11 @@ function settingsInit() {
   }
 
   function craveMain() {
+    prefsInit();
     settingsInit();
     if (cfgFeatureOn('lenses'))     lensesRender();
     if (cfgFeatureOn('bang'))       bangInit();
     if (cfgFeatureOn('categories')) categoriesInit();
-    if (cfgFeatureOn('answered'))   answeredInit();
     if (cfgFeatureOn('tracker'))    trackerInit();
     if (cfgFeatureOn('archive'))    archiveInit();
     if (cfgFeatureOn('within'))     withinInit();
@@ -746,104 +886,7 @@ function catApply() {
 }
 
 function categoriesInit() {
-  catApply();
-  new MutationObserver(catApply)
-    .observe(document.body, { childList: true, subtree: true });
-}
-
-// ---- kagi/answered.js ----
-const ANSWERED_KEY = 'crave_answered';
-
-function answeredLoad() {
-  try { return JSON.parse(GM_getValue(ANSWERED_KEY, '{}')); }
-  catch (_) { return {}; }
-}
-
-function answeredSave(data) {
-  GM_setValue(ANSWERED_KEY, JSON.stringify(data));
-}
-
-function answeredMark(url, title) {
-  const data = answeredLoad();
-  if (data[url]) {
-    delete data[url];
-  } else {
-    data[url] = { title, ts: Date.now() };
-  }
-  answeredSave(data);
-  return !!data[url];
-}
-
-function answeredIsMarked(url) {
-  return !!answeredLoad()[url];
-}
-
-function answeredInjectStyles() {
-  if (document.getElementById('crave-answered-styles')) return;
-  const s = document.createElement('style');
-  s.id = 'crave-answered-styles';
-  s.textContent = `
-    .crave-answered-btn {
-      background: none; border: none; cursor: pointer;
-      font-size: 13px; padding: 0 3px;
-      opacity: 0; transition: opacity .15s;
-      vertical-align: middle; line-height: 1;
-      color: #888;
-    }
-    .crave-answered-btn.crave-marked {
-      opacity: 1 !important; color: #f5a623;
-    }
-    .fz-result:hover .crave-answered-btn,
-    .snippet:hover .crave-answered-btn,
-    [data-type="web"]:hover .crave-answered-btn { opacity: .6; }
-    .crave-answered-btn:hover { opacity: 1 !important; }
-  `;
-  document.head.appendChild(s);
-}
-
-function answeredApply() {
-  answeredInjectStyles();
-
-  const results = [];
-  for (const sel of ['.fz-result','.snippet','[data-type="web"]','.result']) {
-    const els = document.querySelectorAll(sel);
-    if (els.length) { els.forEach(e => results.push(e)); break; }
-  }
-
-  results.forEach(el => {
-    if (el.querySelector('.crave-answered-btn')) return;
-
-    const a = el.querySelector('a[href]');
-    if (!a) return;
-
-    const url   = a.href;
-    const title = (el.querySelector('h3, .title') || a).textContent.trim();
-
-    const btn = document.createElement('button');
-    btn.className   = 'crave-answered-btn';
-    btn.title       = 'This answered it';
-    btn.textContent = '★';
-
-    if (answeredIsMarked(url)) btn.classList.add('crave-marked');
-
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      const now = answeredMark(url, title);
-      btn.classList.toggle('crave-marked', now);
-      uiToast(now ? '★ Marked as answered' : '☆ Unmarked');
-    });
-
-    const titleEl = el.querySelector('h3, .title, a[href]');
-    if (titleEl) titleEl.appendChild(btn);
-    else el.appendChild(btn);
-  });
-}
-
-function answeredInit() {
-  answeredApply();
-  new MutationObserver(answeredApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(catApply);
 }
 
 // ---- kagi/tracker.js ----
@@ -930,9 +973,7 @@ function trackerApply() {
 }
 
 function trackerInit() {
-  trackerApply();
-  new MutationObserver(trackerApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(trackerApply);
 }
 
 // ---- kagi/archive.js ----
@@ -999,9 +1040,7 @@ function archiveApply() {
 }
 
 function archiveInit() {
-  archiveApply();
-  new MutationObserver(archiveApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(archiveApply);
 }
 
 // ---- kagi/within.js ----

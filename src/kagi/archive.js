@@ -63,7 +63,5 @@ function archiveApply() {
 }
 
 function archiveInit() {
-  archiveApply();
-  new MutationObserver(archiveApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(archiveApply);
 }

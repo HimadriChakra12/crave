@@ -6,10 +6,13 @@ const CRAVE_FEATURES = [
   { key: 'lenses',     label: 'Lenses',          desc: 'Quick site filter dropdown in the nav bar',    icon: '🔍', color: '#212848' },
   { key: 'bang',       label: 'Bangs',            desc: '!yt, !gh, !mdn … redirect shortcuts',          icon: '!',  color: '#212848' },
   { key: 'categories', label: 'Category demote',  desc: 'Fade forums, social, SEO farms and listicles', icon: '🏷', color: '#212848' },
-  { key: 'answered',   label: 'Answered star',    desc: 'Mark results that answered your query',        icon: '★',  color: '#212848' },
   { key: 'tracker',    label: 'Tracker badges',   desc: 'Show tracker risk on results',                 icon: '🛡', color: '#212848' },
   { key: 'archive',    label: 'Archive link',     desc: 'Wayback Machine link on each result',          icon: '📦', color: '#212848' },
   { key: 'within',     label: 'Filter results',   desc: 'Instant text filter across visible results',   icon: '⚡', color: '#212848' },
+  { key: 'perfKillTrackers', label: 'Kill trackers',   desc: 'Strip known ad/analytics scripts, iframes, pixels', icon: '🚫', color: '#212848' },
+  { key: 'perfNoAutoplay',   label: 'No autoplay',     desc: 'Pause video/audio, skip preloading media',          icon: '⏸',  color: '#212848' },
+  { key: 'perfLazyMedia',    label: 'Lazy media',      desc: 'Defer off-screen images/iframes until scrolled to', icon: '🐢', color: '#212848' },
+  { key: 'perfNoAnim',       label: 'Cut animations',  desc: 'Collapse transitions/animations to save CPU/GPU',   icon: '🧊', color: '#212848' },
 ];
 
 function settingsInjectStyles() {

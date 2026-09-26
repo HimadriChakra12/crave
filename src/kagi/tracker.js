@@ -82,7 +82,5 @@ function trackerApply() {
 }
 
 function trackerInit() {
-  trackerApply();
-  new MutationObserver(trackerApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(trackerApply);
 }

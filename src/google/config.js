@@ -6,10 +6,14 @@ const DEFAULTS = {
     lenses:     true,
     bang:       true,
     categories: true,
-    answered:   true,
     tracker:    true,
     archive:    true,
     within:     true,
+    /* prefs group -- lightweight/efficiency toggles, on by default */
+    perfKillTrackers: true,
+    perfNoAutoplay:   true,
+    perfLazyMedia:    true,
+    perfNoAnim:       true,
   },
 };
 

@@ -127,7 +127,5 @@ function catApply() {
 }
 
 function categoriesInit() {
-  catApply();
-  new MutationObserver(catApply)
-    .observe(document.body, { childList: true, subtree: true });
+  prefsSharedObserve(catApply);
 }

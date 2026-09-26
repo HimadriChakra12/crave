@@ -16,11 +16,11 @@
   }
 
   function craveMain() {
+    prefsInit();
     settingsInit();
     if (cfgFeatureOn('lenses'))     lensesRender();
     if (cfgFeatureOn('bang'))       bangInit();
     if (cfgFeatureOn('categories')) categoriesInit();
-    if (cfgFeatureOn('answered'))   answeredInit();
     if (cfgFeatureOn('tracker'))    trackerInit();
     if (cfgFeatureOn('archive'))    archiveInit();
     if (cfgFeatureOn('within'))     withinInit();
