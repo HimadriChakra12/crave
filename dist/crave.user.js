@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Crave
 // @namespace    https://github.com/HimadriChakra12/bundlejs
-// @version      3.0.0
+// @version      5.0.0
 // @description  Kagi-like power features on Brave Search: domain blocking/boosting, lenses, Google quick-links, Wikipedia infobox, inline calculator, Google Maps popup, plus a lightweight mode that trims trackers/autoplay/animations for lower RAM/CPU/network use
 // @match        https://search.brave.com/*
 // @grant        GM_getValue
@@ -308,39 +308,51 @@ function lensesInjectStyles() {
     #${LENS_DROPDOWN_ID} {
       position: fixed;
       z-index: 99999;
-      min-width: 180px;
-      background: var(--color-bg-primary, #111);
+      min-width: 220px;
+      background: var(--color-bg-primary, #1b1b1e);
       border: 1px solid var(--divider-subtle, rgba(255,255,255,.1));
-      border-radius: 8px;
-      padding: 6px 0;
-      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 12px 32px rgba(0,0,0,.55);
       display: none;
+      box-sizing: border-box;
     }
     #${LENS_DROPDOWN_ID}.crave-open { display: block; }
 
     .crave-lens-chip {
-      display: block; width: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      width: 100%; box-sizing: border-box;
       text-align: left;
-      font-size: 14px; line-height: 1.5;
-      padding: 5px 16px;
+      font-size: 14px; line-height: 1.4;
+      padding: 10px 12px;
+      margin: 1px 0;
+      border-radius: 8px;
       border: none; background: transparent;
-      color: var(--text-secondary, #aaa);
+      color: var(--text-secondary, #ccc);
       cursor: pointer; white-space: nowrap;
       font-family: inherit;
     }
     .crave-lens-chip:hover {
-      background: var(--interactive-hover, rgba(255,255,255,.06));
+      background: var(--interactive-hover, rgba(255,255,255,.08));
       color: var(--text-primary, #fff);
     }
     .crave-lens-chip.crave-active {
-      color: var(--focus-border, #fa552a);
-      font-weight: 500;
+      background: var(--interactive-hover, rgba(255,255,255,.1));
+      color: var(--text-primary, #fff);
+      font-weight: 600;
+    }
+    .crave-lens-check {
+      color: var(--text-primary, #fff);
+      font-size: 13px;
+      line-height: 1;
+      flex: none;
     }
 
     .crave-lens-sep {
       height: 1px;
       background: var(--divider-subtle, rgba(255,255,255,.08));
-      margin: 4px 0;
+      margin: 6px 4px;
     }
 
     .crave-alias-toggle {
@@ -349,7 +361,7 @@ function lensesInjectStyles() {
       font-size: 11px; font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase;
       color: var(--text-tertiary, #666);
-      padding: 6px 16px 3px;
+      padding: 6px 12px 4px;
       border: none; background: transparent;
       cursor: pointer; font-family: inherit;
     }
@@ -359,7 +371,7 @@ function lensesInjectStyles() {
       border-collapse: collapse;
       font-size: 11px;
       display: none; width: 100%;
-      padding: 0 16px 4px;
+      padding: 0 12px 6px;
       box-sizing: border-box;
     }
     .crave-alias-table.crave-open { display: table; }
@@ -394,9 +406,20 @@ function lensesBuildDropdown() {
   [...BUILTIN_LENSES, ...cfgGet().lenses].forEach(lens => {
     const chip = document.createElement('button');
     chip.className = 'crave-lens-chip';
-    chip.textContent = lens.name;
     chip.title = lens.prefix;
-    if (currentQ.includes(lens.prefix)) chip.classList.add('crave-active');
+
+    const label = document.createElement('span');
+    label.textContent = lens.name;
+    chip.appendChild(label);
+
+    if (currentQ.includes(lens.prefix)) {
+      chip.classList.add('crave-active');
+      const check = document.createElement('span');
+      check.className = 'crave-lens-check';
+      check.textContent = '✓';
+      chip.appendChild(check);
+    }
+
     chip.addEventListener('click', e => {
       e.stopPropagation();
       lensesCloseDropdown();
@@ -510,7 +533,7 @@ function settingsInjectStyles() {
   s.id = 'crave-settings-styles';
   s.textContent = `
     #crave-settings-section {
-      background: #1c1c1d;
+      background: var(--color-container-background);
       border-radius: 12px;
       overflow: hidden;
       margin-top: 16px;
@@ -560,7 +583,7 @@ function settingsInjectStyles() {
     .crave-s-toggle input { opacity:0; width:0; height:0; position:absolute; }
     .crave-s-slider {
       position: absolute; inset: 0; border-radius: 22px;
-      background: rgba(255,255,255,.15);
+      background: #464649;
       cursor: pointer; transition: background .15s;
     }
     .crave-s-slider::before {
@@ -570,8 +593,8 @@ function settingsInjectStyles() {
       transition: transform .15s;
       box-shadow: 0 1px 2px rgba(0,0,0,.4);
     }
-    .crave-s-toggle input:checked + .crave-s-slider { background: #fa552a; }
-    .crave-s-toggle input:checked + .crave-s-slider::before { transform: translateX(18px); }
+    .crave-s-toggle input:checked + .crave-s-slider { background: #bcc6f3; }
+    .crave-s-toggle input:checked + .crave-s-slider::before { transform: translateX(18px); background: #212848;}
   `;
   document.head.appendChild(s);
 }

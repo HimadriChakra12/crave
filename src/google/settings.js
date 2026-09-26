@@ -21,7 +21,7 @@ function settingsInjectStyles() {
   s.id = 'crave-settings-styles';
   s.textContent = `
     #crave-settings-section {
-      background: #1c1c1d;
+      background: var(--color-container-background);
       border-radius: 12px;
       overflow: hidden;
       margin-top: 16px;
@@ -71,7 +71,7 @@ function settingsInjectStyles() {
     .crave-s-toggle input { opacity:0; width:0; height:0; position:absolute; }
     .crave-s-slider {
       position: absolute; inset: 0; border-radius: 22px;
-      background: rgba(255,255,255,.15);
+      background: #464649;
       cursor: pointer; transition: background .15s;
     }
     .crave-s-slider::before {
@@ -81,8 +81,8 @@ function settingsInjectStyles() {
       transition: transform .15s;
       box-shadow: 0 1px 2px rgba(0,0,0,.4);
     }
-    .crave-s-toggle input:checked + .crave-s-slider { background: #fa552a; }
-    .crave-s-toggle input:checked + .crave-s-slider::before { transform: translateX(18px); }
+    .crave-s-toggle input:checked + .crave-s-slider { background: #bcc6f3; }
+    .crave-s-toggle input:checked + .crave-s-slider::before { transform: translateX(18px); background: #212848;}
   `;
   document.head.appendChild(s);
 }
